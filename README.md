@@ -58,7 +58,7 @@ Three properties the design is built around:
 
 ## Roadmap
 
-- [ ] **Phase 0** — Foundations: tooling, strict typing, CI
+- [x] **Phase 0** — Foundations: tooling, strict typing, CI
 - [ ] **Phase 1** — One socket, one exchange, stdout (deliberately fragile: no reconnection)
 - [ ] **Phase 2** — Resilience: supervisor, jittered backoff, watchdog, second exchange
 - [ ] **Phase 3** — Hub, conflation, backpressure
