@@ -1,7 +1,7 @@
 [project]
 name = "marketfeed"
 version = "0.1.0"
-description = "Add your description here"
+description = "Real-time crypto market data ingestion service"
 authors = [
     { name = "Edward Simpson-Fitzgibbon", email = "edward.psf@gmail.com" }
 ]
