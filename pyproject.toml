@@ -40,7 +40,10 @@ files = ["src", "tests"]
 strict = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-strict = true
+addopts = "-m 'not live'"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
+markers = ["live: hits a real exchange; excluded from CI"]
+pythonpath = ["."]
+testpaths = ["tests"]
+strict = true
