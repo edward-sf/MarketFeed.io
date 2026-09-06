@@ -6,7 +6,9 @@ authors = [
     { name = "Edward Simpson-Fitzgibbon", email = "edward.psf@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic-settings>=2.15.0",
+]
 
 [project.scripts]
 marketfeed = "marketfeed:main"
