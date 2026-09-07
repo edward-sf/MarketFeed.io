@@ -47,3 +47,6 @@ markers = ["live: hits a real exchange; excluded from CI"]
 pythonpath = ["."]
 testpaths = ["tests"]
 strict = true
+
+[tool.uv]
+python-preference = "only-managed"
