@@ -1,20 +1,60 @@
 import json
-from datetime import datetime
-from typing import Any
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
+from typing import Any
 
+from marketfeed.domain import Side, Trade
 from marketfeed.errors import MalformedMessageError
 from marketfeed.sources.coinbase.messages import (
     CoinbaseMessage,
     ErrorFrame,
     Heartbeat,
     Subscribed,
+    TradeBatch,
     UnknownFrame,
 )
 
-
 TRADES_CHANNEL = "market_trades"
 HEARTBEATS_CHANNEL = "heartbeats"
+_AGGRESOR: dict[str, Side] = {"BUY": Side.SELL, "SELL": Side.BUY}
+
+
+def _decimal(raw: object, field: str) -> Decimal:
+    if not isinstance(raw, str):
+        raise MalformedMessageError(f"{field} missing or not a string: {raw!r}")
+    try:
+        return Decimal(raw)
+    except InvalidOperation as exc:
+        raise MalformedMessageError(f"{field} is not a number: {raw!r}") from exc
+
+
+def _timestamp(raw: object) -> datetime:
+    if not isinstance(raw, str):
+        raise MalformedMessageError(f"time missing or not a string: {raw!r}")
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise MalformedMessageError(f"unparseable time: {raw!r}") from exc
+    if parsed.tzinfo is None:
+        raise MalformedMessageError(f"naive timestamp refused: {raw!r}")
+    return parsed.astimezone(UTC)
+
+
+def _trade(raw: dict[str, Any], *, sequence: int | None, ingest_ts: datetime) -> Trade:
+    side = _AGGRESOR.get(str(raw.get("side", "")).upper())
+    if side is None:
+        raise MalformedMessageError(f"unrecognized side: {raw.get('side')!r}")
+    return Trade(
+        exchange="coinbase",
+        symbol=to_canonical(str(raw.get("product_id", ""))),
+        price=_decimal(raw.get("price"), "price"),
+        size=_decimal(raw.get("size"), "size"),
+        side=side,
+        exchange_ts=_timestamp(raw.get("time")),
+        ingest_ts=ingest_ts,
+        sequence=sequence,
+    )
 
 
 # Coinbase's product form is already canonical; these exist so the seam is in
@@ -61,6 +101,21 @@ def parse_message(raw: str | bytes, *, ingest_ts: datetime) -> CoinbaseMessage:
             return Subscribed(channels=_subscribed_channels(payload))
         case "heartbeats":
             return Heartbeat(sequence=_optional_int(payload.get("sequence_num")))
+        case "market_trades":
+            sequence = _optional_int(payload.get("sequence_num"))
+            events = payload.get("events")
+            if not isinstance(events, list):
+                raise MalformedMessageError("market_trades frame has no events list")
+            trades = [
+                _trade(raw_trade, sequence=sequence, ingest_ts=ingest_ts)
+                for event in events
+                if isinstance(event, dict)
+                for raw_trade in event.get("trades", [])
+                if isinstance(raw_trade, dict)
+            ]
+            # Coinbase sends newest-first; downstream wants chronological
+            trades.reverse()
+            return TradeBatch(trades=tuple(trades))
         case _:
             return UnknownFrame(frame_type=channel)
 
