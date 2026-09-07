@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from typing import Any
+from collections.abc import Sequence
 
 from marketfeed.errors import MalformedMessageError
 from marketfeed.sources.coinbase.messages import (
@@ -10,6 +11,31 @@ from marketfeed.sources.coinbase.messages import (
     Subscribed,
     UnknownFrame,
 )
+
+
+TRADES_CHANNEL = "market_trades"
+HEARTBEATS_CHANNEL = "heartbeats"
+
+
+# Coinbase's product form is already canonical; these exist so the seam is in
+# place before Kraken's XBT/USD arrives in Phase 2.
+def to_canonical(product_id: str) -> str:
+    return product_id.strip().upper()
+
+
+def to_exchange(symbol: str) -> str:
+    return symbol.strip().upper()
+
+
+def subscribe_payloads(symbols: Sequence[str]) -> list[str]:
+    products = [to_exchange(s) for s in symbols]
+    return [
+        json.dumps({
+            "type": "subscribe",
+            "product_ids": products,
+            "channel": channel,
+        }) for channel in (TRADES_CHANNEL, HEARTBEATS_CHANNEL)
+    ]
 
 
 def parse_message(raw: str | bytes, *, ingest_ts: datetime) -> CoinbaseMessage:
@@ -29,7 +55,6 @@ def parse_message(raw: str | bytes, *, ingest_ts: datetime) -> CoinbaseMessage:
     channel = payload.get("channel")
     if not isinstance(channel, str):
         raise MalformedMessageError("frame has neither 'channel' nor an error 'type'")
-
 
     match channel:
         case "subscriptions":
