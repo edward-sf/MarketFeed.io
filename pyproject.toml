@@ -43,6 +43,7 @@ strict = true
 addopts = "-m 'not live'"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::RuntimeWarning"]
 markers = ["live: hits a real exchange; excluded from CI"]
 pythonpath = ["."]
 testpaths = ["tests"]
