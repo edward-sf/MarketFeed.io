@@ -7,7 +7,7 @@ from websockets.exceptions import ConnectionClosedOK
 from marketfeed.domain import Side, Trade
 from marketfeed.failure_rate import FailureRateWindow
 from marketfeed.sources.coinbase.adapter import CoinbaseAdapter
-from tests.fake_exchange import Close, FakeExchange, Send, load_fixture
+from tests.fake_exchange import Close, FakeExchange, Send, load_fixtures
 
 
 def trade_frame(price: str = "64213.57", side: str = "BUY") -> str:
@@ -101,10 +101,10 @@ async def test_a_frame_carrying_several_trades_yields_each_one() -> None:
 @pytest.mark.asyncio
 async def test_the_real_captured_fixture_streams_without_error() -> None:
     seen: list[Trade] = []
-    script = [Send(line) for line in load_fixture("coinbase/trades.jsonl")] + [Close()]
+    script = [Send(line) for line in load_fixtures("coinbase/trades.jsonl")] + [Close()]
     async with FakeExchange(*script) as fake:
         with pytest.raises(ConnectionClosedOK):
-            assert drain_into(adapter_for(fake), seen)
+            await drain_into(adapter_for(fake), seen)
     assert seen, "the fixture should contain at least one trade"
 
 
@@ -114,4 +114,4 @@ async def test_a_mid_stream_close_is_not_retried() -> None:
     # omission. Phase 2 changes this test when the supervisor arrives.
     async with FakeExchange(Send(trade_frame()), Close()) as fake:
         with pytest.raises(ConnectionClosedOK):
-            assert drain_into(adapter_for(fake), [])
+            await drain_into(adapter_for(fake), [])
