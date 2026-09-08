@@ -4,7 +4,7 @@ A real-time crypto market data ingestion service built on Python's `asyncio`. It
 
 **Domains:** `Market Data`, `Infrastructure`
 
-> **Status: in development — Phase 0 of 7.** The architecture below is designed and specified; implementation is underway. See the [roadmap](#roadmap) for what exists today.
+> **Status: in development — Phase 1 of 7.** The architecture below is designed and specified; implementation is underway. See the [roadmap](#roadmap) for what exists today.
 
 ---
 
@@ -59,7 +59,7 @@ Three properties the design is built around:
 ## Roadmap
 
 - [x] **Phase 0** — Foundations: tooling, strict typing, CI
-- [ ] **Phase 1** — One socket, one exchange, stdout (deliberately fragile: no reconnection)
+- [x] **Phase 1** — One socket, one exchange, stdout. The adapter is complete and well-behaved; the supervisor that would restart cheaply it doesn't exist yet.
 - [ ] **Phase 2** — Resilience: supervisor, jittered backoff, watchdog, second exchange
 - [ ] **Phase 3** — Hub, conflation, backpressure
 - [ ] **Phase 4** — Server, dashboard, deploy ⭐ *first public demo*
@@ -77,6 +77,70 @@ a fake exchange server — a real local WebSocket server — that reproduces the
 testing: mid-stream disconnects, malformed frames, half-open sockets that accept and then go
 silent forever, and schema changes that break the parser.
 
-## Getting started
+## Getting Started
 
-Not yet — there's nothing to run until Phase 1. Setup instructions land with the first adapter.
+**Requirements:** Python 3.12+ and [`uv`](https://docs.astral.sh/uv/). The project pins a `uv`-managed interpreter, so `uv` will fetch the right Python for you.
+
+```bash
+uv sync
+uv run marketfeed
+```
+
+You should see live BTC-USD trades within a second or two:
+
+```
+16:54:10.152  coinbase BTC-USD   sell      0.0000001 @     78805.56  (+  137.1ms)
+16:54:10.421  coinbase BTC-USD   sell      0.0000387 @     78805.56  (+   88.9ms)
+```
+
+
+The trailing figure is `ingest_ts - exchange_ts` and represents the end-to-end latency between the exchange timestamping a trade and this process receiving it. A drift in that number is the earliest signal of clock skew or a degrading connection.
+
+`Ctrl-C` shuts down cleanly. The socket is closed through the generator's cleanup path rather than dropped.
+
+### Configuration
+
+Every setting is an environment variable prefixed `MARKETFEED_`.
+
+| Variable | Default | Meaning |
+| -------- | ------- | ------- |
+| `MARKETFEED_SYMBOLS` | `["BTC-USD"]` | Products to subscribe to. **JSON**, not comma-separated |
+| `MARKETFEED_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `MARKETFEED_RECV_TIMEOUT` | `10.0` | Seconds without a frame before the connection is treated as dead. Coinbase heartbeats arrive every 1.0s, so this is ten missed beats |
+| `MARKETFEED_PARSE_FAILURE_RATIO` | `0.5` | Failure rate over the window that means the schema changed |
+| `MARKETFEED_PARSE_FAILURE_WINDOW_SECONDS` | `60.0` | Length of the failure window |
+| `MARKETFEED_PARSE_FAILURE_MIN_SAMPLES` | `20` | Frames required before the ratio is trusted (i.e., 5/5 failed frames aren't fatal if the next 15 are successful) |
+
+`pydantic-settings` parses complex types as JSON, so a list needs JSON syntax:
+
+```bash
+MARKETFEED_SYMBOLS='["ETH-USD","BTC-USD"]' uv run marketfeed
+```
+
+A comma-separated string is rejected outright rather than silently misparsed.
+
+Trades go to **stdout**; logs go to **stderr**. `uv run marketfeed > trades.txt` captures the data while warnings stay visible.
+
+### Tests
+
+```bash
+uv run pytest
+```
+
+Runs in well under a second. Nothing sleeps a real duration; timeouts and clocks are injected and the WebSocket tests run against a local fake exchange rather than the network.
+
+```bash
+uv run pytest -m live
+```
+
+Connects to the real Coinbase feed and checks the wire format still matches the parser. It is excluded from the default run and from CI, so exchange maintenance can't turn the build red.
+
+Run it manually when trades stop appearing or a parser change is suspected.
+
+### Capturing fresh fixtures
+
+```bash
+uv run python scripts/capture.py BTC-USD 120 > /tmp/coinbase-raw.jsonl
+```
+
+Dumps two minutes of raw frames to JSONL. `tests/fixtures/coinbase/trades.jsonl` is a trimmed capture, committed verbatim. The tests replay exactly the bytes the exchange sent, so re-serializing a fixture through JSON encoder would defeat the purpose.

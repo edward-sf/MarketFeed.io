@@ -1,7 +1,7 @@
 # MarketFeed.io - Architecture & Roadmap Design
 
-**Date:** 2026-09-05
-**Status:** In review
+**Date:** 2026-09-08
+**Status:** In development
 **Author**: Edward Simpson-Fitzgibbon
 
 ---
@@ -77,10 +77,14 @@ Consumers disagree about what a message is worth; the conflator may discard a su
 #### Adapters (`sources/coinbase.py`, `sources/kraken.py`)
 
 ```
-async def stream(self, symbols: list[str]) -> AsyncIterator[Trade]: ...
+async def stream(self) -> AsyncGenerator[Trade, None]: ...
 ```
 
 Each `Adapter` owns exactly one exchange's idiosyncrasies: subscribe handshake, heartbeat format, field names, and symbol translation in both directions. It does **not** own reconnection, which lives in the `Supervisor`. This keeps the policy uniform, testable, and not duplicated per exchange.
+
+##### Updates from P1 Development
+
+Symbols are constructor state, not a `stream()` argument. `AsyncGenerator` rather than `AsyncIterator` because consumers are required to wrap the stream in `contextlib.aclosing`, which needs `aclose()`. Only `AsyncGenerator` declares it. `connect()` and `run(hub)` arrive in Phase 2 as **concrete** methods on an `Adapter` ABC, so the boundary test, one new file implementing `stream()`, stays literally true.
 
 ##### Boundary Test
 
@@ -115,10 +119,10 @@ Static assets on Cloudflare Pages, connecting directly to the WS server.
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 
-class Side(str, Enum):
+class Side(StrEnum):
     BUY = "buy"
     SELL = "sell"
 
@@ -133,7 +137,7 @@ class Trade:
     side: Side                      # aggressor side
     exchange_ts: datetime           # tz-aware UTC, as claimed by the exchange
     ingest_ts: datetime             # tz-aware UTC, when we received it
-    sequence: int | None = None     # exchange-provided, for gap detection
+    sequence: int | None = None     # exchange frame counter, for gap detection
 ```
 
 ### Rationale
@@ -158,7 +162,7 @@ Domain models know nothing about JSON. Serialization lives in a separate `wire.p
 
 ### Validation Strategy
 
-Parse at the boundary, once, so the interior can trust its inputs. `parse_trade()` raises `MalformedMessage`, caught in the adapter loop, counted, and logged with sampling. **One bad message must never kill a connection, and must never be silently swallowed.**
+Parse at the boundary, once, so the interior can trust its inputs. `parse_message()` returns a closed, exchange-local message union, `TradeBatch | Subscribed | Heartbeat | ErrorFrame | UnknownFrame`, and raises `MalformedMessageError`, caught in the adapter loop, counted, and logged with sampling. A *total* parser is what keeps heartbeats from counting as parse failures. Routing every frame through a trade-only parser would inflate the failure rate permanently and trip the schema-change threshold on a healthy connection. The adapter matches on the union and ends with `assert_never`, so adding a variant without handling it fails the type check rather than silently dropping messages. **One bad message must never kill a connection, and must never be silently swallowed.**
 
 ### Pydantic
 
@@ -233,7 +237,7 @@ Rationale for not simply isolating everything is that partial availability can b
 
 - **A blocking call freezes every connection.** One thread, one loop. Detected with `loop.set_debug(True)` with warning on callbacks >100ms. Genuinely blocking work goes in `asyncio.to_thread()`.
 
-- **Half-open sockets hang forever.** The server dies without sending FIN. `await ws.recv()` waits indefinitely with nothing raised. This is the most common production failure in WebSocket feeds. Mitigation through wrap `recv()` in `asyncio.timeout()` sized slightly above the exchange's heartbeat interval and treat a timeout as a dead connection.
+- **A socket can go quiet while staying alive.** `websockets` sends pings every 20s and drops the connection when no pong returns, so a genuinely half-open socket is largely handled for us. What pings do *not* catch is a connection that is healthy at every layer below the application while the exchange has stopped sending data; the server answers pings automatically and sends nothing else. For mitigation we wrap `recv()` in `asyncio.timeout()` sized above the exchange's heartbeat interval and treat a timeout as a dead connection. Coinbase heartbeats, for example, arrive every 1.000s and with the heartbeats channel subscribed the longest observed gap between any two frames was 1.001s. Without that channel there is no traffic guarantee and the timeout becomes dangerously arbitrary.
 
 - **Shutdown is a deadline, not a request.** Platforms send `SIGTERM`, wait a grace period, then `SIGKILL`. Sinks flush under a timeout; an undeadlined drain is a slower `SIGKILL` with unplanned data loss.
 
