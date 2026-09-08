@@ -9,10 +9,11 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
+    "websockets>=17.1",
 ]
 
 [project.scripts]
-marketfeed = "marketfeed:main"
+marketfeed = "marketfeed.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -39,7 +40,14 @@ files = ["src", "tests"]
 strict = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-strict = true
+addopts = "-m 'not live'"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::RuntimeWarning"]
+markers = ["live: hits a real exchange; excluded from CI"]
+pythonpath = ["."]
+testpaths = ["tests"]
+strict = true
+
+[tool.uv]
+python-preference = "only-managed"
