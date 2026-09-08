@@ -29,11 +29,11 @@ async def consume(settings: Settings) -> None:
             window_seconds=settings.parse_failure_window_seconds,
             ratio=settings.parse_failure_ratio,
             min_samples=settings.parse_failure_min_samples,
-        )
-        async with aclosing(adapter.stream()) as trades:
-        async for trade in trades:
-        print(format_trade(trade))
+        ),
     )
+    async with aclosing(adapter.stream()) as trades:
+        async for trade in trades:
+            print(format_trade(trade))
 
 
 async def _amain() -> None:
