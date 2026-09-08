@@ -25,7 +25,7 @@ def trade_frame(price: str = "64213.57", side: str = "BUY") -> str:
                             "price": price,
                             "size": "0.001",
                             "side": side,
-                            "time": "2026-09-06T11:59:59.396Z"
+                            "time": "2026-09-06T11:59:59.396Z",
                         }
                     ],
                 }

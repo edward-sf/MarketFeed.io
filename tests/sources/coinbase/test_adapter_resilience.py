@@ -16,9 +16,7 @@ def adapter_for(fake: FakeExchange, *, min_samples: int = 10) -> CoinbaseAdapter
         ["BTC-USD"],
         uri=fake.uri,
         recv_timeout=5.0,
-        failures=FailureRateWindow(
-            window_seconds=60.0, ratio=0.5, min_samples=min_samples
-        ),
+        failures=FailureRateWindow(window_seconds=60.0, ratio=0.5, min_samples=min_samples),
     )
 
 

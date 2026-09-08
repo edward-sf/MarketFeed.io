@@ -21,7 +21,7 @@ def _trade() -> Trade:
 
 def test_a_trade_cannot_be_mutated_after_construction() -> None:
     with pytest.raises(FrozenInstanceError):
-        _trade().price = Decimal("1")   # type: ignore[misc]
+        _trade().price = Decimal("1")  # type: ignore[misc]
 
 
 def test_a_trade_has_no_instance_dict() -> None:

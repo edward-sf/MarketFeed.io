@@ -21,13 +21,13 @@ def frame(**overrides: object) -> str:
         "price": "64213.57",
         "size": "0.001",
         "side": "BUY",
-        "time": "2026-09-06T11:59:59.396251Z"
+        "time": "2026-09-06T11:59:59.396251Z",
     } | overrides
     return json.dumps(
         {
             "channel": "market_trades",
             "sequence_num": 7,
-            "events": [{"type": "update", "trades": [trade]}]
+            "events": [{"type": "update", "trades": [trade]}],
         }
     )
 
@@ -85,10 +85,7 @@ def test_a_batch_is_reordered_oldest_first() -> None:
     assert [str(t.price) for t in msg.trades] == ["1.00", "2.00", "3.00"]
 
 
-@pytest.mark.parametrize(
-    ("reported", "expected"),
-    [("BUY", Side.SELL), ("SELL", Side.BUY)]
-)
+@pytest.mark.parametrize(("reported", "expected"), [("BUY", Side.SELL), ("SELL", Side.BUY)])
 def test_side_is_normalized_to_the_aggressor(reported: str, expected: Side) -> None:
     assert parse_one(side=reported).side == expected
 

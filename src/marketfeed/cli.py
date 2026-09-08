@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 def format_trade(trade: Trade) -> str:
     lag_ms = (trade.ingest_ts - trade.exchange_ts).total_seconds() * 1000
-    when = trade.exchange_ts.strftime("%H:%M:%S.%f")[:-3]   # microseconds -> milliseconds
+    when = trade.exchange_ts.strftime("%H:%M:%S.%f")[:-3]  # microseconds -> milliseconds
     return (
         f"{when}  {trade.exchange:<8} {trade.symbol:<9} {trade.side.value:<4}"
         f" {trade.size:>14f} @ {trade.price:>12f}  (+{lag_ms:7.1f}ms)"

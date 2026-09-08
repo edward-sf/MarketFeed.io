@@ -25,12 +25,12 @@ class CoinbaseAdapter:
     name = "coinbase"
 
     def __init__(
-            self,
-            symbols: Sequence[str],
-            *,
-            uri: str,
-            recv_timeout: float,
-            failures: FailureRateWindow,
+        self,
+        symbols: Sequence[str],
+        *,
+        uri: str,
+        recv_timeout: float,
+        failures: FailureRateWindow,
     ) -> None:
         self._symbols = list(symbols)
         self._uri = uri
@@ -65,9 +65,7 @@ class CoinbaseAdapter:
                         # A bogus product_id gets a normal ack subscribing to
                         # nothing. Fail here with a useful message rather than
                         # letting recv_timeout fire ten seconds later.
-                        raise ProtocolError(
-                            f"coinbase subscribed to nothing for {self._symbols}"
-                        )
+                        raise ProtocolError(f"coinbase subscribed to nothing for {self._symbols}")
                     case Heartbeat() | Subscribed():
                         pass
                     case ErrorFrame(reason=reason):

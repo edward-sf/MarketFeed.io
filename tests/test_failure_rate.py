@@ -18,12 +18,7 @@ class FakeClock:
 
 
 def window(clock: FakeClock) -> FailureRateWindow:
-    return FailureRateWindow(
-        window_seconds=60.0,
-        ratio=0.5,
-        min_samples=10,
-        clock=clock
-    )
+    return FailureRateWindow(window_seconds=60.0, ratio=0.5, min_samples=10, clock=clock)
 
 
 def test_a_fresh_window_has_not_tripped() -> None:

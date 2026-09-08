@@ -70,11 +70,14 @@ def to_exchange(symbol: str) -> str:
 def subscribe_payloads(symbols: Sequence[str]) -> list[str]:
     products = [to_exchange(s) for s in symbols]
     return [
-        json.dumps({
-            "type": "subscribe",
-            "product_ids": products,
-            "channel": channel,
-        }) for channel in (TRADES_CHANNEL, HEARTBEATS_CHANNEL)
+        json.dumps(
+            {
+                "type": "subscribe",
+                "product_ids": products,
+                "channel": channel,
+            }
+        )
+        for channel in (TRADES_CHANNEL, HEARTBEATS_CHANNEL)
     ]
 
 

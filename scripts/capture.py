@@ -16,13 +16,7 @@ async def capture(product_id: str, seconds: float) -> None:
     async with websockets.connect(URI) as ws:
         for channel in ("market_trades", "heartbeats"):
             await ws.send(
-                json.dumps(
-                    {
-                        "type": "subscribe",
-                        "product_ids": [product_id],
-                        "channel": channel
-                    }
-                )
+                json.dumps({"type": "subscribe", "product_ids": [product_id], "channel": channel})
             )
         try:
             async with asyncio.timeout(seconds):

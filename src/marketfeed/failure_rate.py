@@ -11,14 +11,14 @@ class FailureRateWindow:
     """
 
     def __init__(
-            self,
-            *,
-            window_seconds: float,
-            ratio: float,
-            min_samples: int,
-            # time.monotonic for time window,
-            # avoiding timezone changes and other clock inconsistencies
-            clock: Callable[[], float] = time.monotonic,
+        self,
+        *,
+        window_seconds: float,
+        ratio: float,
+        min_samples: int,
+        # time.monotonic for time window,
+        # avoiding timezone changes and other clock inconsistencies
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._window_seconds = window_seconds
         self._ratio = ratio
