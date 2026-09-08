@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-marketfeed = "marketfeed:main"
+marketfeed = "marketfeed.cli:main"
 
 [build-system]
 requires = ["hatchling"]
