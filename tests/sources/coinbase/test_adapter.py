@@ -7,7 +7,7 @@ from websockets.exceptions import ConnectionClosedOK
 from marketfeed.domain import Side, Trade
 from marketfeed.failure_rate import FailureRateWindow
 from marketfeed.sources.coinbase.adapter import CoinbaseAdapter
-from tests.fake_exchange import Close, FakeExchange, Send, load_fixtures
+from tests.fake_exchange import Action, Close, FakeExchange, Send, load_fixtures
 
 
 def trade_frame(price: str = "64213.57", side: str = "BUY") -> str:
@@ -71,7 +71,7 @@ async def test_the_adapter_subscribes_to_the_requested_symbols() -> None:
 @pytest.mark.asyncio
 async def test_the_adapter_yields_normalized_trades_in_order() -> None:
     seen: list[Trade] = []
-    script = [
+    script: list[Action] = [
         Send(trade_frame(price="1.00")),
         Send(trade_frame(price="2.00", side="SELL")),
         Close(),
@@ -101,7 +101,8 @@ async def test_a_frame_carrying_several_trades_yields_each_one() -> None:
 @pytest.mark.asyncio
 async def test_the_real_captured_fixture_streams_without_error() -> None:
     seen: list[Trade] = []
-    script = [Send(line) for line in load_fixtures("coinbase/trades.jsonl")] + [Close()]
+    script: list[Action] = [Send(line) for line in load_fixtures("coinbase/trades.jsonl")] 
+    script.append(Close())
     async with FakeExchange(*script) as fake:
         with pytest.raises(ConnectionClosedOK):
             await drain_into(adapter_for(fake), seen)
