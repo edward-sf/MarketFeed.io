@@ -45,7 +45,7 @@ def adapter_for(fake: FakeExchange, *, recv_timeout: float = 5.0) -> CoinbaseAda
 
 async def drain_into(adapter: CoinbaseAdapter, sink: list[Trade]) -> None:
     """Consume the whole stream into `sink`.
-    
+
     It takes the list rather than returning one on purpose: every test here ends
     with the stream raising, so a helper that returned its collection would
     never reach the return statement.
@@ -101,7 +101,7 @@ async def test_a_frame_carrying_several_trades_yields_each_one() -> None:
 @pytest.mark.asyncio
 async def test_the_real_captured_fixture_streams_without_error() -> None:
     seen: list[Trade] = []
-    script: list[Action] = [Send(line) for line in load_fixtures("coinbase/trades.jsonl")] 
+    script: list[Action] = [Send(line) for line in load_fixtures("coinbase/trades.jsonl")]
     script.append(Close())
     async with FakeExchange(*script) as fake:
         with pytest.raises(ConnectionClosedOK):
