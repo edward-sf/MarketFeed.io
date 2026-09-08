@@ -128,7 +128,7 @@ Trades go to **stdout**; logs go to **stderr**. `uv run marketfeed > trades.txt`
 uv run pytest
 ```
 
-Runs in well under a second. Nothing sleeps a real duration; timeouts and clocks are injected and the WebSocket tests run against a local fake exchange rather than the network.
+Runs in ~10s with 98% of that time attributed to one test waiting out `websocket`'s default `close_timeout`. Nothing sleeps a real duration; timeouts and clocks are injected and the WebSocket tests run against a local fake exchange rather than the network.
 
 ```bash
 uv run pytest -m live
