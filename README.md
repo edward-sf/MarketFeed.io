@@ -89,8 +89,9 @@ uv run marketfeed
 You should see live BTC-USD trades within a second or two:
 
 ```
-16:54:10.152  coinbase BTC-USD   sell      0.0000001 @     78805.56  (+  137.1ms)
-16:54:10.421  coinbase BTC-USD   sell      0.0000387 @     78805.56  (+   88.9ms)
+16:53:25.664  coinbase BTC-USD   sell     0.00000004 @     78760.34  (+16039.1ms)
+16:53:25.896  coinbase BTC-USD   buy      0.00235332 @     78760.35  (+15807.1ms)
+16:53:25.953  coinbase BTC-USD   sell     0.00000621 @     78760.34  (+15749.5ms)
 ```
 
 
