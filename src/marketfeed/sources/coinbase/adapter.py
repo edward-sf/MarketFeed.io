@@ -1,14 +1,11 @@
-import asyncio
 import logging
-from collections.abc import AsyncGenerator, Sequence
-from datetime import UTC, datetime
+from collections.abc import Iterable
+from datetime import datetime
 from typing import assert_never
 
-from websockets.asyncio.client import connect
-
 from marketfeed.domain import Trade
-from marketfeed.errors import MalformedMessageError, ProtocolError, SchemaError
-from marketfeed.failure_rate import FailureRateWindow
+from marketfeed.errors import ProtocolError
+from marketfeed.sources.base import Adapter
 from marketfeed.sources.coinbase.messages import (
     ErrorFrame,
     Heartbeat,
@@ -21,56 +18,25 @@ from marketfeed.sources.coinbase.parse import parse_message, subscribe_payloads
 log = logging.getLogger(__name__)
 
 
-class CoinbaseAdapter:
+class CoinbaseAdapter(Adapter):
     name = "coinbase"
 
-    def __init__(
-        self,
-        symbols: Sequence[str],
-        *,
-        uri: str,
-        recv_timeout: float,
-        failures: FailureRateWindow,
-    ) -> None:
-        self._symbols = list(symbols)
-        self._uri = uri
-        self._recv_timeout = recv_timeout
-        self._failures = failures
+    def _subscribe_payloads(self) -> Iterable[str]:
+        return subscribe_payloads(self._symbols)
 
-    async def stream(self) -> AsyncGenerator[Trade]:
-        async with connect(self._uri) as ws:
-            for payload in subscribe_payloads(self._symbols):
-                await ws.send(payload)
-
-            while True:
-                async with asyncio.timeout(self._recv_timeout):
-                    raw = await ws.recv()
-
-                try:
-                    msg = parse_message(raw, ingest_ts=datetime.now(UTC))
-                except MalformedMessageError as exc:
-                    self._failures.record_failure()
-                    if self._failures.tripped():
-                        raise SchemaError("coinbase parse failure rate exceeded") from exc
-                    log.warning("skipped malformed frame: %s", exc)
-                    continue
-
-                self._failures.record_success()
-
-                match msg:
-                    case TradeBatch(trades=trades):
-                        for trade in trades:
-                            yield trade
-                    case Subscribed(channels=()):
-                        # A bogus product_id gets a normal ack subscribing to
-                        # nothing. Fail here with a useful message rather than
-                        # letting recv_timeout fire ten seconds later.
-                        raise ProtocolError(f"coinbase subscribed to nothing for {self._symbols}")
-                    case Heartbeat() | Subscribed():
-                        pass
-                    case ErrorFrame(reason=reason):
-                        raise ProtocolError(reason)
-                    case UnknownFrame(frame_type=frame_type):
-                        log.warning("unrecognized frame type %r", frame_type)
-                    case _ as unreachable:
-                        assert_never(unreachable)
+    def _handle(self, raw: str | bytes, ingest_ts: datetime) -> tuple[Trade, ...]:
+        msg = parse_message(raw, ingest_ts=ingest_ts)
+        match msg:
+            case TradeBatch(trades=trades):
+                return trades
+            case Subscribed(channels=()):
+                raise ProtocolError(f"coinbase subscribed to nothing for {self._symbols}")
+            case Heartbeat() | Subscribed():
+                return ()
+            case ErrorFrame(reason=reason):
+                raise ProtocolError(reason)
+            case UnknownFrame(frame_type=frame_type):
+                log.warning("unrecognized frame type %r", frame_type)
+                return ()
+            case _ as unreachable:
+                assert_never(unreachable)

@@ -28,7 +28,7 @@ def evaluate(
     down_after: float,
 ) -> Status:
     """Three states, not a boolean.
-    
+
     DEGRADED means 'stale, and we are working on it.' DOWN means 'stale long
     enough that you should stop assuming it is coming back'. A binary
     green/red collapses those two, and the difference is the whole content of

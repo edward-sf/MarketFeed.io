@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import aclosing
+from collections.abc import Iterable
 
 import pytest
 
@@ -18,6 +18,37 @@ def adapter_for(fake: FakeExchange, *, recv_timeout: float) -> CoinbaseAdapter:
     )
 
 
+class ExplodingAdapter(CoinbaseAdapter):
+    """Fails after the socket has opened, before __aenter__ can return."""
+
+    def _subscribe_payloads(self) -> Iterable[str]:
+        raise RuntimeError("boom after the socket opened")
+
+
+@pytest.mark.asyncio
+async def test_a_failure_during_setup_does_not_leak_the_socket() -> None:
+    """Once connect() has succeeded, anything that goes wrong before __aenter__
+    returns leaves an open socket that nothing else will ever close. Verified:
+    without the guard in __aenter__ this socket genuinely leaks.
+
+    A stalled SERVER cannot trigger this. __aenter__ only sends subscribes and
+    never reads the acks, so it returns long before any server-side stall
+    matters. The failure has to come from our side of the handshake.
+    """
+    async with FakeExchange(Silence()) as fake:
+        adapter = ExplodingAdapter(
+            ["BTC-USD"],
+            uri=fake.uri,
+            recv_timeout=30.0,
+            failures=FailureRateWindow(window_seconds=60.0, ratio=0.5, min_samples=10),
+        )
+        with pytest.raises(RuntimeError, match="boom"):
+            async with adapter as _trades:
+                pass
+
+        await asyncio.wait_for(fake.disconnected.wait(), timeout=2.0)
+
+
 @pytest.mark.asyncio
 async def test_a_silent_but_open_socket_times_out() -> None:
     """WebSockets answers protocol pings automatically, so the keepalive stays
@@ -27,7 +58,7 @@ async def test_a_silent_but_open_socket_times_out() -> None:
     async with FakeExchange(Silence()) as fake:
         adapter = adapter_for(fake, recv_timeout=0.05)
         with pytest.raises(TimeoutError):
-            async with aclosing(adapter.stream()) as trades:
+            async with adapter as trades:
                 async for _ in trades:
                     pass
 
@@ -39,7 +70,7 @@ async def test_cancelling_the_consumer_closes_the_socket() -> None:
         first = asyncio.Event()
 
         async def consume() -> None:
-            async with aclosing(adapter.stream()) as trades:
+            async with adapter as trades:
                 async for _ in trades:
                     first.set()
 

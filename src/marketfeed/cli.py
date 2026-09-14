@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import signal
-from contextlib import aclosing
 
 from marketfeed.config import Settings
 from marketfeed.domain import Trade
@@ -31,7 +30,7 @@ async def consume(settings: Settings) -> None:
             min_samples=settings.parse_failure_min_samples,
         ),
     )
-    async with aclosing(adapter.stream()) as trades:
+    async with adapter as trades:
         async for trade in trades:
             print(format_trade(trade))
 

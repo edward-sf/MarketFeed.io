@@ -1,5 +1,3 @@
-from contextlib import aclosing
-
 import pytest
 
 from marketfeed.config import Settings
@@ -19,7 +17,7 @@ async def test_the_live_feed_still_matches_our_parser() -> None:
         recv_timeout=30.0,
         failures=FailureRateWindow(window_seconds=60.0, ratio=0.5, min_samples=20),
     )
-    async with aclosing(adapter.stream()) as trades:
+    async with adapter as trades:
         async for trade in trades:
             assert trade.symbol == "BTC-USD"
             assert trade.exchange_ts.tzinfo is not None

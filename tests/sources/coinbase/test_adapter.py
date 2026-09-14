@@ -1,11 +1,11 @@
 import json
-from contextlib import aclosing
 
 import pytest
 from websockets.exceptions import ConnectionClosedOK
 
 from marketfeed.domain import Side, Trade
 from marketfeed.failure_rate import FailureRateWindow
+from marketfeed.sources.base import Adapter
 from marketfeed.sources.coinbase.adapter import CoinbaseAdapter
 from tests.fake_exchange import Action, Close, FakeExchange, Send, load_fixtures
 
@@ -43,14 +43,14 @@ def adapter_for(fake: FakeExchange, *, recv_timeout: float = 5.0) -> CoinbaseAda
     )
 
 
-async def drain_into(adapter: CoinbaseAdapter, sink: list[Trade]) -> None:
+async def drain_into(adapter: Adapter, sink: list[Trade]) -> None:
     """Consume the whole stream into `sink`.
 
     It takes the list rather than returning one on purpose: every test here ends
     with the stream raising, so a helper that returned its collection would
     never reach the return statement.
     """
-    async with aclosing(adapter.stream()) as trades:
+    async with adapter as trades:
         async for trade in trades:
             sink.append(trade)
 
