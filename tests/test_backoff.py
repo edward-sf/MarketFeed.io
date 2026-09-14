@@ -1,5 +1,6 @@
 from marketfeed.backoff import Backoff
 
+
 def test_the_schedule_doubles_and_then_caps() -> None:
     b = Backoff(base=0.5, maximum=4.0, jitter=lambda d: d)
     assert [b.next_delay() for _ in range(6)] == [0.5, 1.0, 2.0, 4.0, 4.0, 4.0]

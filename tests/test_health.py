@@ -4,9 +4,7 @@ from marketfeed.health import Status, evaluate
 
 
 def status(connected: bool, stale_for: float | None) -> Status:
-    return evaluate(
-        connected=connected, stale_for=stale_for, degraded_after=5.0, down_after=60.0
-    )
+    return evaluate(connected=connected, stale_for=stale_for, degraded_after=5.0, down_after=60.0)
 
 
 def test_an_exchange_that_has_never_delivered_is_down() -> None:

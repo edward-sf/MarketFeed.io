@@ -8,12 +8,12 @@ def _full_jitter(delay: float) -> float:
 
 class Backoff:
     """Exponential backoff with full jitter.
-    
+
     Un-jittered backoff synchronizes clients: when an exchange restarts a load
     balancer, every client reconnects on the same schedule, amplifying the
     outage and earning rate limits. Sampling uniformly below the current delay
     spreads the herd out.
-    
+
     Jitter is injected so tests can assert an exact schedule and so the
     policy is configuration in production rather than a literal.
     """
