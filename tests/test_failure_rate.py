@@ -1,20 +1,5 @@
 from marketfeed.failure_rate import FailureRateWindow
-
-
-class FakeClock:
-    """A hand-rolled clock beats freezegun here: no dependency, no global
-    patching, and the test reads as a timeline. We don't care to handle a
-    dependency used for a handful of test cases and this is easy to build.
-    """
-
-    def __init__(self) -> None:
-        self.now = 1000.0
-
-    def __call__(self) -> float:
-        return self.now
-
-    def advance(self, seconds: float) -> None:
-        self.now += seconds
+from tests.doubles import FakeClock
 
 
 def window(clock: FakeClock) -> FailureRateWindow:

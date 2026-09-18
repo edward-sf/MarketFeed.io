@@ -31,3 +31,19 @@ async def test_the_harness_replays_frames_verbatim() -> None:
         await ws.send("{}")
         await ws.recv()
         assert await ws.recv() == raw
+
+
+@pytest.mark.asyncio
+async def test_sequence_serves_a_different_script_per_connection() -> None:
+    fake = FakeExchange.sequence([Send("first"), Close()], [Send("second"), Close()])
+    async with fake:
+        seen = []
+        for _ in range(2):
+            async with connect(fake.uri) as ws:
+                await ws.send("sub")
+                await ws.send("sub")
+                await ws.recv()
+                await ws.recv()
+                seen.append(str(await ws.recv()))
+    assert seen == ["first", "second"]
+    assert fake.connections == 2
