@@ -6,6 +6,7 @@ import pytest
 from websockets.exceptions import ConnectionClosedError
 
 from marketfeed.domain import Trade
+from marketfeed.errors import SchemaError
 from marketfeed.supervisor import Supervisor
 from tests.doubles import FakeClock, FakeSleep, Idle, StubAdapter, make_trade
 
@@ -168,3 +169,57 @@ async def test_a_flapping_endpoint_does_not_reset_the_backoff() -> None:
     await run_until(supervisor, done)
 
     assert sleeper.delays[:4] == [0.5, 1.0, 2.0, 4.0]
+
+
+@pytest.mark.asyncio
+async def test_one_exchange_failing_does_not_disturb_its_sibling() -> None:
+    broken = StubAdapter("broken", [ConnectionClosedError(None, None)])
+    healthy = StubAdapter("healthy", [*[make_trade() for _ in range(5)], Idle()])
+    seen: list[Trade] = []
+    done = asyncio.Event()
+    supervisor = Supervisor(
+        [broken, healthy],
+        publish=collect_into(seen, 5, done),
+        sleep=FakeSleep(),
+        clock=FakeClock(),
+    )
+
+    await run_until(supervisor, done)
+
+    assert len(seen) == 5
+    assert broken.connections >= 2, "the broken adapter should have kept retrying"
+
+
+@pytest.mark.asyncio
+async def test_a_permanent_fault_escalates_and_takes_the_siblings_with_it() -> None:
+    """The deliberate EXCEPTION to isolation, asserted so nobody 'fixes' it.
+    
+    A schema-broken parser is silent corruption. Dying loudly beats serving
+    half a system behind a green light.
+    """
+    doomed = StubAdapter("doomed", [SchemaError("coinbase parse failure rate exceeded")])
+    sibling = StubAdapter("sibling", [make_trade(), Idle()])
+    supervisor = Supervisor(
+        [doomed, sibling], publish=lambda _t: None, sleep=FakeSleep(), clock=FakeClock()
+    )
+
+    with pytest.raises(ExceptionGroup) as excinfo:
+        await supervisor.run()
+
+    assert any(isinstance(exc, SchemaError) for exc in excinfo.value.exceptions)
+    assert sibling.exits == 1, "the sibling's socket should have been closed on the way down"
+
+
+@pytest.mark.asyncio
+async def test_an_unrecognized_exception_is_not_retried() -> None:
+    # A KeyError from a parser bug must die with a traceback, not spin forever.
+    adapter = StubAdapter("buggy", [KeyError("events")])
+    supervisor = Supervisor(
+        [adapter], publish=lambda _t: None, sleep=FakeSleep(), clock=FakeClock()
+    )
+
+    with pytest.raises(ExceptionGroup) as excinfo:
+        await supervisor.run()
+
+    assert any(isinstance(exc, KeyError) for exc in excinfo.value.exceptions)
+    assert adapter.connections == 1, "it must not have retried"
