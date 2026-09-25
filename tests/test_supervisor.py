@@ -8,7 +8,14 @@ from websockets.exceptions import ConnectionClosedError
 from marketfeed.domain import Trade
 from marketfeed.errors import SchemaError
 from marketfeed.supervisor import Supervisor
-from tests.doubles import FakeClock, FakeSleep, Idle, StubAdapter, make_trade
+from tests.doubles import (
+    FakeClock,
+    FakeSleep,
+    Idle,
+    StubAdapter,
+    Hang,
+    make_trade
+)
 
 
 class TickingTrade:
@@ -223,3 +230,43 @@ async def test_an_unrecognized_exception_is_not_retried() -> None:
 
     assert any(isinstance(exc, KeyError) for exc in excinfo.value.exceptions)
     assert adapter.connections == 1, "it must not have retried"
+
+
+@pytest.mark.asyncio
+async def test_cancellation_closes_every_adapter() -> None:
+    a = StubAdapter("a", [make_trade(), Idle()])
+    b = StubAdapter("b", [make_trade(), Idle()])
+    seen: list[Trade] = []
+    done = asyncio.Event()
+    supervisor = Supervisor(
+        [a, b], publish=collect_into(seen, 2, done), sleep=FakeSleep(), clock=FakeClock()
+    )
+
+    await run_until(supervisor, done)
+
+    # Shutdown-only cleanup paths are otherwise first exercised in production.
+    assert (a.exits, b.exits) == (1, 1)
+
+
+@pytest.mark.asyncio
+async def test_a_connection_that_hangs_times_out_and_is_retried() -> None:
+    adapter = StubAdapter("slow", Hang(), [make_trade(), Idle()])
+    seen: list[Trade] = []
+    done = asyncio.Event()
+    sleeper = FakeSleep()
+    supervisor = Supervisor(
+        [adapter],
+        publish=collect_into(seen, 1, done),
+        sleep=sleeper,
+        clock=FakeClock(),
+        jitter=lambda d: d,
+        connect_timeout=0.05,
+    )
+
+    await run_until(supervisor, done)
+
+    assert len(seen) == 1
+    assert sleeper.delays == [0.5]
+    # __aexit__ did NOT run for the hung connect: AsyncExitStack only unwinds
+    # what it actually entered, and enter_async_context never returned.
+    assert adapter.exits == 1
