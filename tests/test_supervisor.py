@@ -10,6 +10,20 @@ from marketfeed.supervisor import Supervisor
 from tests.doubles import FakeClock, FakeSleep, Idle, StubAdapter, make_trade
 
 
+class TickingTrade:
+    """Advances a FakeClock when the supervisor publishes. Lets a test say
+    'this connection stayed up for N seconds' without waiting N seconds."""
+
+    def __init__(self, clock: FakeClock, seconds: float) -> None:
+        self._clock = clock
+        self._seconds = seconds
+        self.count = 0
+
+    def __call__(self, _trade: Trade) -> None:
+        self.count += 1
+        self._clock.advance(self._seconds)
+
+
 def collect_into(sink: list[Trade], target: int, done: asyncio.Event) -> Callable[[Trade], None]:
     def publish(trade: Trade) -> None:
         sink.append(trade)
@@ -88,3 +102,69 @@ async def test_a_stream_that_simply_ends_is_retried() -> None:
     await run_until(supervisor, done)
 
     assert adapter.connections == 2
+
+
+@pytest.mark.asyncio
+async def test_a_connection_that_stays_up_resets_the_backoff() -> None:
+    clock = FakeClock()
+    sleeper = FakeSleep()
+    adapter = StubAdapter(
+        "stub",
+        [ConnectionClosedError(None, None)],
+        [make_trade(), ConnectionClosedError(None, None)],
+        [make_trade(), Idle()],
+    )
+    done = asyncio.Event()
+    tick = TickingTrade(clock, seconds=40.0)
+
+    def publish(trade: Trade) -> None:
+        tick(trade)
+        if tick.count >= 2:
+            done.set()
+
+    supervisor = Supervisor(
+        [adapter],
+        publish=publish,
+        sleep=sleeper,
+        clock=clock,
+        jitter=lambda d: d,
+        reset_after=30.0,
+    )
+
+    await run_until(supervisor, done)
+
+    assert sleeper.delays == [0.5, 0.5]
+
+
+@pytest.mark.asyncio
+async def test_a_flapping_endpoint_does_not_reset_the_backoff() -> None:
+    """A socket that accepts, lives a moment, and dies is indistinguishable from a
+    healthy one at the instant of connect. Resetting on __aenter__ would pin
+    this endpoint at the minimum delay forever.
+    """
+    clock = FakeClock()
+    sleeper = FakeSleep()
+    adapter = StubAdapter(
+        "stub",
+        *([make_trade(), ConnectionClosedError(None, None)] for _ in range(4)),
+    )
+    done = asyncio.Event()
+    tick = TickingTrade(clock, seconds=1.0)
+
+    def publish(trade: Trade) -> None:
+        tick(trade)
+        if tick.count >= 4:
+            done.set()
+
+    supervisor = Supervisor(
+        [adapter],
+        publish=publish,
+        sleep=sleeper,
+        clock=clock,
+        jitter=lambda d: d,
+        reset_after=30.0,
+    )
+
+    await run_until(supervisor, done)
+
+    assert sleeper.delays[:4] == [0.5, 1.0, 2.0, 4.0]
